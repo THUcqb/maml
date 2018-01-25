@@ -34,53 +34,53 @@ class DataGenerator(object):
             self.input_range = config.get('input_range', [-5.0, 5.0])
             self.dim_input = 1
             self.dim_output = 1
-        elif 'omniglot' in FLAGS.datasource:
-            self.num_classes = config.get('num_classes', FLAGS.num_classes)
-            self.img_size = config.get('img_size', (28, 28))
-            self.dim_input = np.prod(self.img_size)
-            self.dim_output = self.num_classes
-            # data that is pre-resized using PIL with lanczos filter
-            data_folder = config.get('data_folder', './data/omniglot_resized')
+        #elif 'omniglot' in FLAGS.datasource:
+        #    self.num_classes = config.get('num_classes', FLAGS.num_classes)
+        #    self.img_size = config.get('img_size', (28, 28))
+        #    self.dim_input = np.prod(self.img_size)
+        #    self.dim_output = self.num_classes
+        #    # data that is pre-resized using PIL with lanczos filter
+        #    data_folder = config.get('data_folder', './data/omniglot_resized')
 
-            character_folders = [os.path.join(data_folder, family, character)
-                                 for family in os.listdir(data_folder)
-                                 if os.path.isdir(os.path.join(data_folder, family))
-                                 for character in os.listdir(os.path.join(data_folder, family))]
-            random.seed(1)
-            random.shuffle(character_folders)
-            num_val = 100
-            num_train = config.get('num_train', 1200) - num_val
-            self.metatrain_character_folders = character_folders[:num_train]
-            if FLAGS.test_set:
-                self.metaval_character_folders = character_folders[num_train+num_val:]
-            else:
-                self.metaval_character_folders = character_folders[num_train:num_train+num_val]
-            self.rotations = config.get('rotations', [0, 90, 180, 270])
-        elif FLAGS.datasource == 'miniimagenet':
-            self.num_classes = config.get('num_classes', FLAGS.num_classes)
-            self.img_size = config.get('img_size', (84, 84))
-            self.dim_input = np.prod(self.img_size)*3
-            self.dim_output = self.num_classes
-            metatrain_folder = config.get(
-                'metatrain_folder', './data/miniImagenet/train')
-            if FLAGS.test_set:
-                metaval_folder = config.get(
-                    'metaval_folder', './data/miniImagenet/test')
-            else:
-                metaval_folder = config.get(
-                    'metaval_folder', './data/miniImagenet/val')
+        #    character_folders = [os.path.join(data_folder, family, character)
+        #                         for family in os.listdir(data_folder)
+        #                         if os.path.isdir(os.path.join(data_folder, family))
+        #                         for character in os.listdir(os.path.join(data_folder, family))]
+        #    random.seed(1)
+        #    random.shuffle(character_folders)
+        #    num_val = 100
+        #    num_train = config.get('num_train', 1200) - num_val
+        #    self.metatrain_character_folders = character_folders[:num_train]
+        #    if FLAGS.test_set:
+        #        self.metaval_character_folders = character_folders[num_train+num_val:]
+        #    else:
+        #        self.metaval_character_folders = character_folders[num_train:num_train+num_val]
+        #    self.rotations = config.get('rotations', [0, 90, 180, 270])
+        #elif FLAGS.datasource == 'miniimagenet':
+        #    self.num_classes = config.get('num_classes', FLAGS.num_classes)
+        #    self.img_size = config.get('img_size', (84, 84))
+        #    self.dim_input = np.prod(self.img_size)*3
+        #    self.dim_output = self.num_classes
+        #    metatrain_folder = config.get(
+        #        'metatrain_folder', './data/miniImagenet/train')
+        #    if FLAGS.test_set:
+        #        metaval_folder = config.get(
+        #            'metaval_folder', './data/miniImagenet/test')
+        #    else:
+        #        metaval_folder = config.get(
+        #            'metaval_folder', './data/miniImagenet/val')
 
-            metatrain_folders = [os.path.join(metatrain_folder, label)
-                                 for label in os.listdir(metatrain_folder)
-                                 if os.path.isdir(os.path.join(metatrain_folder, label))
-                                 ]
-            metaval_folders = [os.path.join(metaval_folder, label)
-                               for label in os.listdir(metaval_folder)
-                               if os.path.isdir(os.path.join(metaval_folder, label))
-                               ]
-            self.metatrain_character_folders = metatrain_folders
-            self.metaval_character_folders = metaval_folders
-            self.rotations = config.get('rotations', [0])
+        #    metatrain_folders = [os.path.join(metatrain_folder, label)
+        #                         for label in os.listdir(metatrain_folder)
+        #                         if os.path.isdir(os.path.join(metatrain_folder, label))
+        #                         ]
+        #    metaval_folders = [os.path.join(metaval_folder, label)
+        #                       for label in os.listdir(metaval_folder)
+        #                       if os.path.isdir(os.path.join(metaval_folder, label))
+        #                       ]
+        #    self.metatrain_character_folders = metatrain_folders
+        #    self.metaval_character_folders = metaval_folders
+        #    self.rotations = config.get('rotations', [0])
         else:
             raise ValueError('Unrecognized data source')
 

@@ -113,12 +113,12 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
         if 'generate' in dir(data_generator):
             batch_x, batch_y, amp, phase = data_generator.generate()
 
-            if FLAGS.baseline == 'oracle':
-                batch_x = np.concatenate(
-                    [batch_x, np.zeros([batch_x.shape[0], batch_x.shape[1], 2])], 2)
-                for i in range(FLAGS.meta_batch_size):
-                    batch_x[i, :, 1] = amp[i]
-                    batch_x[i, :, 2] = phase[i]
+            #if FLAGS.baseline == 'oracle':
+            #    batch_x = np.concatenate(
+            #        [batch_x, np.zeros([batch_x.shape[0], batch_x.shape[1], 2])], 2)
+            #    for i in range(FLAGS.meta_batch_size):
+            #        batch_x[i, :, 1] = amp[i]
+            #        batch_x[i, :, 2] = phase[i]
 
             inputa = batch_x[:, :num_classes*FLAGS.update_batch_size, :]
             labela = batch_y[:, :num_classes*FLAGS.update_batch_size, :]
@@ -136,9 +136,9 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
         if (itr % SUMMARY_INTERVAL == 0 or itr % PRINT_INTERVAL == 0):
             input_tensors.extend(
                 [model.summ_op, model.total_loss1, model.total_losses2[FLAGS.num_updates-1]])
-            if model.classification:
-                input_tensors.extend(
-                    [model.total_accuracy1, model.total_accuracies2[FLAGS.num_updates-1]])
+            #if model.classification:
+            #    input_tensors.extend(
+            #        [model.total_accuracy1, model.total_accuracies2[FLAGS.num_updates-1]])
 
         result = sess.run(input_tensors, feed_dict)
 
@@ -266,14 +266,14 @@ def main():
             test_num_updates = 5
         else:
             test_num_updates = 10
-    else:
-        if FLAGS.datasource == 'miniimagenet':
-            if FLAGS.train == True:
-                test_num_updates = 1  # eval on at least one update during training
-            else:
-                test_num_updates = 10
-        else:
-            test_num_updates = 10
+    #else:
+    #    if FLAGS.datasource == 'miniimagenet':
+    #        if FLAGS.train == True:
+    #            test_num_updates = 1  # eval on at least one update during training
+    #        else:
+    #            test_num_updates = 10
+    #    else:
+    #        test_num_updates = 10
 
     if FLAGS.train == False:
         orig_meta_batch_size = FLAGS.meta_batch_size
@@ -305,48 +305,48 @@ def main():
                     FLAGS.update_batch_size*2, FLAGS.meta_batch_size)
 
     dim_output = data_generator.dim_output
-    if FLAGS.baseline == 'oracle':
-        assert FLAGS.datasource == 'sinusoid'
-        dim_input = 3
-        FLAGS.pretrain_iterations += FLAGS.metatrain_iterations
-        FLAGS.metatrain_iterations = 0
-    else:
-        dim_input = data_generator.dim_input
+    #if FLAGS.baseline == 'oracle':
+    #    assert FLAGS.datasource == 'sinusoid'
+    #    dim_input = 3
+    #    FLAGS.pretrain_iterations += FLAGS.metatrain_iterations
+    #    FLAGS.metatrain_iterations = 0
+    #else:
+    dim_input = data_generator.dim_input
 
-    if FLAGS.datasource == 'miniimagenet' or FLAGS.datasource == 'omniglot':
-        tf_data_load = True
-        num_classes = data_generator.num_classes
+    #if FLAGS.datasource == 'miniimagenet' or FLAGS.datasource == 'omniglot':
+    #    tf_data_load = True
+    #    num_classes = data_generator.num_classes
 
-        if FLAGS.train:  # only construct training model if needed
-            random.seed(5)
-            image_tensor, label_tensor = data_generator.make_data_tensor()
-            inputa = tf.slice(
-                image_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
-            inputb = tf.slice(
-                image_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
-            labela = tf.slice(
-                label_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
-            labelb = tf.slice(
-                label_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
-            input_tensors = {'inputa': inputa, 'inputb': inputb,
-                             'labela': labela, 'labelb': labelb}
+    #    if FLAGS.train:  # only construct training model if needed
+    #        random.seed(5)
+    #        image_tensor, label_tensor = data_generator.make_data_tensor()
+    #        inputa = tf.slice(
+    #            image_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
+    #        inputb = tf.slice(
+    #            image_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
+    #        labela = tf.slice(
+    #            label_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
+    #        labelb = tf.slice(
+    #            label_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
+    #        input_tensors = {'inputa': inputa, 'inputb': inputb,
+    #                         'labela': labela, 'labelb': labelb}
 
-        random.seed(6)
-        image_tensor, label_tensor = data_generator.make_data_tensor(
-            train=False)
-        inputa = tf.slice(
-            image_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
-        inputb = tf.slice(
-            image_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
-        labela = tf.slice(
-            label_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
-        labelb = tf.slice(
-            label_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
-        metaval_input_tensors = {
-            'inputa': inputa, 'inputb': inputb, 'labela': labela, 'labelb': labelb}
-    else:
-        tf_data_load = False
-        input_tensors = None
+    #    random.seed(6)
+    #    image_tensor, label_tensor = data_generator.make_data_tensor(
+    #        train=False)
+    #    inputa = tf.slice(
+    #        image_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
+    #    inputb = tf.slice(
+    #        image_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
+    #    labela = tf.slice(
+    #        label_tensor, [0, 0, 0], [-1, num_classes*FLAGS.update_batch_size, -1])
+    #    labelb = tf.slice(
+    #        label_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
+    #    metaval_input_tensors = {
+    #        'inputa': inputa, 'inputb': inputb, 'labela': labela, 'labelb': labelb}
+    #else:
+    tf_data_load = False
+    input_tensors = None
 
     model = MAML(dim_input, dim_output, test_num_updates=test_num_updates)
     if FLAGS.train or not tf_data_load:
