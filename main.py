@@ -30,7 +30,7 @@ import random
 import tensorflow as tf
 
 from data_generator import DataGenerator
-from maml import MAML
+from maml import MAMLSinusoid
 from tensorflow.python.platform import flags
 
 FLAGS = flags.FLAGS
@@ -106,14 +106,14 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
     prelosses, postlosses = [], []
 
     num_classes = data_generator.num_classes  # for classification, 1 otherwise
-    multitask_weights, reg_weights = [], []
+    # multitask_weights, reg_weights = [], []
 
     for itr in range(resume_itr, FLAGS.pretrain_iterations + FLAGS.metatrain_iterations):
         feed_dict = {}
         if 'generate' in dir(data_generator):
             batch_x, batch_y, amp, phase = data_generator.generate()
 
-            #if FLAGS.baseline == 'oracle':
+            # if FLAGS.baseline == 'oracle':
             #    batch_x = np.concatenate(
             #        [batch_x, np.zeros([batch_x.shape[0], batch_x.shape[1], 2])], 2)
             #    for i in range(FLAGS.meta_batch_size):
@@ -136,7 +136,7 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
         if (itr % SUMMARY_INTERVAL == 0 or itr % PRINT_INTERVAL == 0):
             input_tensors.extend(
                 [model.summ_op, model.total_loss1, model.total_losses2[FLAGS.num_updates-1]])
-            #if model.classification:
+            # if model.classification:
             #    input_tensors.extend(
             #        [model.total_accuracy1, model.total_accuracies2[FLAGS.num_updates-1]])
 
@@ -163,34 +163,32 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
                        exp_string + '/model' + str(itr))
 
         # sinusoid is infinite data, so no need to test on meta-validation set.
-        if (itr != 0) and itr % TEST_PRINT_INTERVAL == 0 and FLAGS.datasource != 'sinusoid':
-            if 'generate' not in dir(data_generator):
-                feed_dict = {}
-                if model.classification:
-                    input_tensors = [model.metaval_total_accuracy1,
-                                     model.metaval_total_accuracies2[FLAGS.num_updates-1], model.summ_op]
-                else:
-                    input_tensors = [
-                        model.metaval_total_loss1, model.metaval_total_losses2[FLAGS.num_updates-1], model.summ_op]
-            else:
-                batch_x, batch_y, amp, phase = data_generator.generate(
-                    train=False)
-                inputa = batch_x[:, :num_classes*FLAGS.update_batch_size, :]
-                inputb = batch_x[:, num_classes*FLAGS.update_batch_size:, :]
-                labela = batch_y[:, :num_classes*FLAGS.update_batch_size, :]
-                labelb = batch_y[:, num_classes*FLAGS.update_batch_size:, :]
-                feed_dict = {model.inputa: inputa, model.inputb: inputb,
-                             model.labela: labela, model.labelb: labelb, model.meta_lr: 0.0}
-                if model.classification:
-                    input_tensors = [model.total_accuracy1,
-                                     model.total_accuracies2[FLAGS.num_updates-1]]
-                else:
-                    input_tensors = [model.total_loss1,
-                                     model.total_losses2[FLAGS.num_updates-1]]
+        # if (itr != 0) and itr % TEST_PRINT_INTERVAL == 0 and FLAGS.datasource != 'sinusoid':
+        #     if 'generate' not in dir(data_generator):
+        #         feed_dict = {}
+        #         # if model.classification:
+        #         #     input_tensors = [model.metaval_total_accuracy1,
+        #         #                      model.metaval_total_accuracies2[FLAGS.num_updates-1], model.summ_op]
+        #         # else:
+        #         input_tensors = [
+        #             model.metaval_total_loss1, model.metaval_total_losses2[FLAGS.num_updates-1], model.summ_op]
+        #     else:
+        #         batch_x, batch_y, amp, phase = data_generator.generate(train=False)
+        #         inputa = batch_x[:, :num_classes*FLAGS.update_batch_size, :]
+        #         inputb = batch_x[:, num_classes*FLAGS.update_batch_size:, :]
+        #         labela = batch_y[:, :num_classes*FLAGS.update_batch_size, :]
+        #         labelb = batch_y[:, num_classes*FLAGS.update_batch_size:, :]
+        #         feed_dict = {model.inputa: inputa, model.inputb: inputb,
+        #                      model.labela: labela, model.labelb: labelb, model.meta_lr: 0.0}
+        #         # if model.classification:
+        #         #     input_tensors = [model.total_accuracy1,
+        #         #                      model.total_accuracies2[FLAGS.num_updates-1]]
+        #         # else:
+        #         input_tensors = [model.total_loss1, model.total_losses2[FLAGS.num_updates-1]]
 
-            result = sess.run(input_tensors, feed_dict)
-            print('Validation results: ' +
-                  str(result[0]) + ', ' + str(result[1]))
+        #     result = sess.run(input_tensors, feed_dict)
+        #     print('Validation results: ' +
+        #           str(result[0]) + ', ' + str(result[1]))
 
     saver.save(sess, FLAGS.logdir + '/' + exp_string + '/model' + str(itr))
 
@@ -228,11 +226,11 @@ def test(model, saver, sess, exp_string, data_generator, test_num_updates=None):
             feed_dict = {model.inputa: inputa, model.inputb: inputb,
                          model.labela: labela, model.labelb: labelb, model.meta_lr: 0.0}
 
-        if model.classification:
-            result = sess.run([model.metaval_total_accuracy1] +
-                              model.metaval_total_accuracies2, feed_dict)
-        else:  # this is for sinusoid
-            result = sess.run([model.total_loss1] +
+        # if model.classification:
+        #     result = sess.run([model.metaval_total_accuracy1] +
+        #                       model.metaval_total_accuracies2, feed_dict)
+        # else:  # this is for sinusoid
+        result = sess.run([model.total_loss1] +
                               model.total_losses2, feed_dict)
         metaval_accuracies.append(result)
 
@@ -266,7 +264,7 @@ def main():
             test_num_updates = 5
         else:
             test_num_updates = 10
-    #else:
+    # else:
     #    if FLAGS.datasource == 'miniimagenet':
     #        if FLAGS.train == True:
     #            test_num_updates = 1  # eval on at least one update during training
@@ -305,15 +303,15 @@ def main():
                     FLAGS.update_batch_size*2, FLAGS.meta_batch_size)
 
     dim_output = data_generator.dim_output
-    #if FLAGS.baseline == 'oracle':
+    # if FLAGS.baseline == 'oracle':
     #    assert FLAGS.datasource == 'sinusoid'
     #    dim_input = 3
     #    FLAGS.pretrain_iterations += FLAGS.metatrain_iterations
     #    FLAGS.metatrain_iterations = 0
-    #else:
+    # else:
     dim_input = data_generator.dim_input
 
-    #if FLAGS.datasource == 'miniimagenet' or FLAGS.datasource == 'omniglot':
+    # if FLAGS.datasource == 'miniimagenet' or FLAGS.datasource == 'omniglot':
     #    tf_data_load = True
     #    num_classes = data_generator.num_classes
 
@@ -344,16 +342,19 @@ def main():
     #        label_tensor, [0, num_classes*FLAGS.update_batch_size, 0], [-1, -1, -1])
     #    metaval_input_tensors = {
     #        'inputa': inputa, 'inputb': inputb, 'labela': labela, 'labelb': labelb}
-    #else:
-    tf_data_load = False
-    input_tensors = None
+    # else:
+    #input_tensors = {
+    #    'inputa': tf.placeholder(tf.float32),
+    #    'inputb': tf.placeholder(tf.float32),
+    #    'labela': tf.placeholder(tf.float32),
+    #    'labelb': tf.placeholder(tf.float32)
+    #}
 
-    model = MAML(dim_input, dim_output, test_num_updates=test_num_updates)
-    if FLAGS.train or not tf_data_load:
-        model.construct_model(input_tensors=input_tensors, prefix='metatrain_')
-    if tf_data_load:
-        model.construct_model(
-            input_tensors=metaval_input_tensors, prefix='metaval_')
+    model = MAMLSinusoid(dim_input, dim_output, test_num_updates=test_num_updates)
+    if FLAGS.train:
+        model.construct_model(prefix='metatrain_')
+    else:
+        model.construct_model(prefix='metaval_')
     model.summ_op = tf.summary.merge_all()
 
     saver = loader = tf.train.Saver(tf.get_collection(
