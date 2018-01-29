@@ -111,15 +111,15 @@ class DataGeneratorCartPole(DataGenerator):
             # self.env.seed(0)
             observation = self.env.reset()
             done = False
-            for sample_iter in range(self.num_samples_per_task):
+            for sample_iter in range(20 * self.num_samples_per_task):
                 action = self.env.action_space.sample()
-                inputs[task_iter, sample_iter] = np.concatenate(
+                inputs[task_iter, sample_iter // 20] = np.concatenate(
                     [observation, [action]])
                 if done:
                     self.env.reset()
                 observation, reward, done, info = self.env.step(action)
-                outputs[task_iter, sample_iter] = observation - \
-                    inputs[task_iter, sample_iter, :-1]
+                outputs[task_iter, sample_iter // 20] = observation - \
+                    inputs[task_iter, sample_iter // 20, :-1]
 
             inputs[task_iter] -= np.mean(inputs[task_iter], axis=0)
             inputs[task_iter] = np.nan_to_num(
