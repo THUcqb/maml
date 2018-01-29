@@ -20,6 +20,7 @@ class Maml(object):
         mamls = {
             'sinusoid': MamlMLP(dim_input, dim_output, test_num_updates, [40, 40]),
             'cartpole': MamlMLP(dim_input, dim_output, test_num_updates, [20, 20]),
+            'acrobot': MamlMLP(dim_input, dim_output, test_num_updates, [8]),
         }
         return mamls[datasource]
 

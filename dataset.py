@@ -22,6 +22,7 @@ class DataGenerator(object):
         data_generators = {
             'sinusoid': DataGeneratorSinusoid,
             'cartpole': DataGeneratorCartPole,
+            'acrobot': DataGeneratorAcrobot,
         }
         return data_generators[datasource](num_samples_per_task, num_tasks)
 
@@ -133,3 +134,67 @@ class DataGeneratorCartPole(DataGenerator):
             outputs[task_iter] = outputs[task_iter][idxs]
 
         return inputs, outputs, masscart, masspole, length
+
+
+class DataGeneratorAcrobot(DataGenerator):
+    """Generate a meta batch data of an acrobot.
+
+    Every task has num_samples_per_task samples.
+    Input has 6-d state & 1-d action
+    Output has 6-d new state
+    """
+
+    def __init__(self, num_samples_per_task, num_tasks):
+        super(DataGeneratorAcrobot, self).__init__(
+            num_samples_per_task, num_tasks)
+        self.dim_input = 7    # 6 + 1
+        self.dim_output = 6
+
+    def batch(self):
+        inputs = np.zeros(
+            [self.num_tasks, self.num_samples_per_task, self.dim_input])
+        outputs = np.zeros(
+            [self.num_tasks, self.num_samples_per_task, self.dim_output])
+
+        # First, sample num_tasks tasks from all cartpole tasks.
+        link_length_1 = np.random.uniform(0.1, 10, self.num_tasks)
+        link_length_2 = np.random.uniform(0.1, 10, self.num_tasks)
+        link_mass_1 = np.random.uniform(0.1, 10, self.num_tasks)
+        link_mass_2 = np.random.uniform(0.1, 10, self.num_tasks)
+
+        # Get num_samples_per_task pairs of data for every task.
+        for task_iter in range(self.num_tasks):
+            # Sample states and actions as training data in one task.
+            gym.ACROBOT_LINK_LENGTH_1 = link_length_1[task_iter]
+            gym.ACROBOT_LINK_LENGTH_2 = link_length_2[task_iter]
+            gym.ACROBOT_LINK_MASS_1 = link_mass_1[task_iter]
+            gym.ACROBOT_LINK_MASS_2 = link_mass_2[task_iter]
+
+            self.env = gym.make('Acrobot-v1')
+            # self.env.seed(0)
+            observation = self.env.reset()
+            done = False
+            sample_per_T = 5
+            for sample_iter in range(sample_per_T * self.num_samples_per_task):
+                action = self.env.action_space.sample()
+                inputs[task_iter, sample_iter // sample_per_T] = np.concatenate(
+                    [observation, [action]])
+                if done:
+                    self.env.reset()
+                observation, reward, done, info = self.env.step(action)
+                outputs[task_iter, sample_iter // sample_per_T] = observation - \
+                    inputs[task_iter, sample_iter // sample_per_T, :-1]
+
+            inputs[task_iter] -= np.mean(inputs[task_iter], axis=0)
+            inputs[task_iter] = np.nan_to_num(
+                inputs[task_iter] / np.std(inputs[task_iter], axis=0))
+            outputs[task_iter] -= np.mean(outputs[task_iter], axis=0)
+            outputs[task_iter] = np.nan_to_num(
+                outputs[task_iter] / np.std(outputs[task_iter], axis=0))
+            idxs = np.arange(self.num_samples_per_task)
+            np.random.shuffle(idxs)
+            inputs[task_iter] = inputs[task_iter][idxs]
+            outputs[task_iter] = outputs[task_iter][idxs]
+
+        return inputs, outputs, link_length_1, link_length_2, link_mass_1, link_mass_2
+
