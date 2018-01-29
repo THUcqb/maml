@@ -42,11 +42,11 @@ def conv_block(inp, cweight, bweight, reuse, scope, activation=tf.nn.relu, max_p
     return normed
 
 
-def normalize(inp, activation, reuse, scope):
+def normalize(inp, activation, scope):
     if FLAGS.norm == 'batch_norm':
-        return tf_layers.batch_norm(inp, activation_fn=activation, reuse=reuse, scope=scope)
+        return tf_layers.batch_norm(inp, activation_fn=activation, scope=scope)
     elif FLAGS.norm == 'layer_norm':
-        return tf_layers.layer_norm(inp, activation_fn=activation, reuse=reuse, scope=scope)
+        return tf_layers.layer_norm(inp, activation_fn=activation, scope=scope)
     elif FLAGS.norm == 'None':
         if activation is not None:
             return activation(inp)

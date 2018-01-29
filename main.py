@@ -1,7 +1,10 @@
 """
 Usage Instructions:
     10-shot sinusoid:
-        python main.py --datasource=sinusoid --logdir=logs/sine/ --metatrain_iterations=70000 --norm=None --update_batch_size=10
+        python main.py --datasource=sinusoid --logdir=logs/sine/ --metatrain_iterations=16000 --update_batch_size=10
+
+    10-shot cartpole:
+        python main.py --datasource=cartpole --logdir=logs/cartpole/ --metatrain_iterations=16000 --update_batch_size=10
 
     To run evaluation, use the '--train=False' flag to use the test set.
 
@@ -12,9 +15,8 @@ import numpy as np
 import pickle
 import random
 import tensorflow as tf
-
 from dataset import DataGenerator
-from maml import MAML
+from maml import Maml
 from tensorflow.python.platform import flags
 
 FLAGS = flags.FLAGS
@@ -22,7 +24,6 @@ FLAGS = flags.FLAGS
 # Dataset/method options
 flags.DEFINE_string('datasource', 'sinusoid',
                     'sinusoid or omniglot or miniimagenet')
-
 # Training options
 flags.DEFINE_integer('pretrain_iterations', 0,
                      'number of pre-training iterations.')
@@ -31,17 +32,16 @@ flags.DEFINE_integer('metatrain_iterations', 15000,
                      'number of metatraining iterations.')
 flags.DEFINE_integer('meta_batch_size', 25,
                      'number of tasks sampled per meta-update')
-flags.DEFINE_float('meta_lr', 0.001, 'the base learning rate of the generator')
+flags.DEFINE_float('meta_lr', 1e-3, 'the base learning rate of the generator')
 flags.DEFINE_integer('update_batch_size', 5,
                      'number of examples used for inner gradient update (K for K-shot learning).')
-# 0.1 for omniglot
 flags.DEFINE_float('update_lr', 1e-3,
                    'step size alpha for inner gradient update.')
 flags.DEFINE_integer(
     'num_updates', 1, 'number of inner gradient updates during training.')
 
 # Model options
-flags.DEFINE_string('norm', 'batch_norm', 'batch_norm, layer_norm, or None')
+flags.DEFINE_string('norm', 'None', 'batch_norm, layer_norm, or None')
 flags.DEFINE_integer(
     'num_filters', 64, 'number of filters for conv nets -- 32 for miniimagenet, 64 for omiglot.')
 flags.DEFINE_bool(
@@ -66,17 +66,13 @@ flags.DEFINE_integer('train_update_batch_size', -1,
 flags.DEFINE_float('train_update_lr', -1,
                    'value of inner gradient step step during training. (use if you want to test with a different value)')  # 0.1 for omniglot
 
+SUMMARY_INTERVAL = 100
+SAVE_INTERVAL = SUMMARY_INTERVAL * 20
+PRINT_INTERVAL = SUMMARY_INTERVAL
+TEST_PRINT_INTERVAL = PRINT_INTERVAL * 50
+
 
 def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
-    SUMMARY_INTERVAL = 100
-    SAVE_INTERVAL = 1000
-    if FLAGS.datasource == 'sinusoid':
-        PRINT_INTERVAL = 1000
-        TEST_PRINT_INTERVAL = PRINT_INTERVAL * 5
-    else:
-        PRINT_INTERVAL = 100
-        TEST_PRINT_INTERVAL = PRINT_INTERVAL * 5
-
     if FLAGS.log:
         train_writer = tf.summary.FileWriter(
             FLAGS.logdir + '/' + exp_string, sess.graph)
@@ -84,36 +80,45 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
     prelosses, postlosses = [], []
 
     for itr in range(resume_itr, FLAGS.pretrain_iterations + FLAGS.metatrain_iterations):
+        # Prepare task
+        # training (for inner gradients) data
+        # and testing (for meta gradient) data
         feed_dict = {}
-        if 'batch' in dir(data_generator):
-            batch_x, batch_y, amp, phase = data_generator.batch()
+        batch_x, batch_y = data_generator.batch()[:2]
 
-            inputa = batch_x[:, :FLAGS.update_batch_size, :]
-            labela = batch_y[:, :FLAGS.update_batch_size, :]
-            # b used for testing
-            inputb = batch_x[:, FLAGS.update_batch_size:, :]
-            labelb = batch_y[:, FLAGS.update_batch_size:, :]
-            feed_dict = {model.inputa: inputa, model.inputb: inputb,
-                         model.labela: labela, model.labelb: labelb}
+        inputa = batch_x[:, :FLAGS.update_batch_size, :]
+        labela = batch_y[:, :FLAGS.update_batch_size, :]
+        # b used for testing
+        inputb = batch_x[:, FLAGS.update_batch_size:, :]
+        labelb = batch_y[:, FLAGS.update_batch_size:, :]
+        feed_dict = {model.inputa: inputa, model.inputb: inputb,
+                     model.labela: labela, model.labelb: labelb}
 
+        fetches = {}
+
+        # Pretrain the parameters
+        # To minimize the preloss before any inner update
+        # Equal to trying to obtain an all-purpose model on the tasks
         if itr < FLAGS.pretrain_iterations:
-            input_tensors = [model.pretrain_op]
+            fetches['train'] = model.pretrain_op
         else:
-            input_tensors = [model.metatrain_op]
+            fetches['train'] = model.metatrain_op
 
-        if (itr % SUMMARY_INTERVAL == 0 or itr % PRINT_INTERVAL == 0):
-            input_tensors.extend(
-                [model.summ_op, model.total_loss1, model.total_losses2[FLAGS.num_updates - 1]])
+        # Print and summary
+        if itr % SUMMARY_INTERVAL == 0:
+            fetches['summary'] = model.summ_op
+            fetches['pre-losses'] = model.total_losses2[0]
+            fetches['post-losses'] = model.total_losses2[FLAGS.num_updates]
 
-        result = sess.run(input_tensors, feed_dict)
+        results = sess.run(fetches, feed_dict)
 
         if itr % SUMMARY_INTERVAL == 0:
-            prelosses.append(result[-2])
+            prelosses.append(results['pre-losses'])
             if FLAGS.log:
-                train_writer.add_summary(result[1], itr)
-            postlosses.append(result[-1])
+                train_writer.add_summary(results['summary'], itr)
+            postlosses.append(results['post-losses'])
 
-        if (itr != 0) and itr % PRINT_INTERVAL == 0:
+        if (itr + 1) % PRINT_INTERVAL == 0:
             if itr < FLAGS.pretrain_iterations:
                 print_str = 'Pretrain Iteration ' + str(itr)
             else:
@@ -123,7 +128,7 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
             print(print_str)
             prelosses, postlosses = [], []
 
-        if (itr != 0) and itr % SAVE_INTERVAL == 0:
+        if (itr + 1) % SAVE_INTERVAL == 0:
             saver.save(sess, FLAGS.logdir + '/' +
                        exp_string + '/model' + str(itr))
 
@@ -132,10 +137,10 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
         #     if 'batch' not in dir(data_generator):
         #         feed_dict = {}
         #         # if model.classification:
-        #         #     input_tensors = [model.metaval_total_accuracy1,
+        #         #     fetches = [model.metaval_total_accuracy1,
         #         #                      model.metaval_total_accuracies2[FLAGS.num_updates-1], model.summ_op]
         #         # else:
-        #         input_tensors = [
+        #         fetches = [
         #             model.metaval_total_loss1, model.metaval_total_losses2[FLAGS.num_updates-1], model.summ_op]
         #     else:
         #         batch_x, batch_y, amp, phase = data_generator.batch()
@@ -146,12 +151,12 @@ def train(model, saver, sess, exp_string, data_generator, resume_itr=0):
         #         feed_dict = {model.inputa: inputa, model.inputb: inputb,
         #                      model.labela: labela, model.labelb: labelb, model.meta_lr: 0.0}
         #         # if model.classification:
-        #         #     input_tensors = [model.total_accuracy1,
+        #         #     fetches = [model.total_accuracy1,
         #         #                      model.total_accuracies2[FLAGS.num_updates-1]]
         #         # else:
-        #         input_tensors = [model.total_loss1, model.total_losses2[FLAGS.num_updates-1]]
+        #         fetches = [model.total_loss1, model.total_losses2[FLAGS.num_updates-1]]
 
-        #     result = sess.run(input_tensors, feed_dict)
+        #     result = sess.run(fetches, feed_dict)
         #     print('Validation results: ' +
         #           str(result[0]) + ', ' + str(result[1]))
 
@@ -174,7 +179,7 @@ def test(model, saver, sess, exp_string, data_generator, test_num_updates=None):
             feed_dict = {}
             feed_dict = {model.meta_lr: 0.0}
         else:
-            batch_x, batch_y, amp, phase = data_generator.batch()
+            batch_x, batch_y = data_generator.batch()[:2]
 
             inputa = batch_x[:, :FLAGS.update_batch_size, :]
             inputb = batch_x[:, FLAGS.update_batch_size:, :]
@@ -213,31 +218,25 @@ def test(model, saver, sess, exp_string, data_generator, test_num_updates=None):
 
 
 def main():
-    if FLAGS.datasource == 'sinusoid':
-        if FLAGS.train:
-            test_num_updates = 5
-        else:
-            test_num_updates = 10
-    else:
-        test_num_updates = 10
+    test_num_updates = 5
 
     if FLAGS.train == False:
         orig_meta_batch_size = FLAGS.meta_batch_size
         # always use meta batch size of 1 when testing.
         FLAGS.meta_batch_size = 1
 
-    data_generator = DataGenerator.create(FLAGS.datasource, FLAGS.update_batch_size * 2, FLAGS.meta_batch_size)
+    data_generator = DataGenerator.create(
+        FLAGS.datasource, FLAGS.update_batch_size * 2, FLAGS.meta_batch_size)
 
     dim_input = data_generator.dim_input
     dim_output = data_generator.dim_output
 
-    model = MAML.create(FLAGS.datasource, dim_input, dim_output,
-                 test_num_updates=test_num_updates)
+    model = Maml.create(FLAGS.datasource, dim_input, dim_output,
+                        test_num_updates=test_num_updates)
     if FLAGS.train:
         model.construct_model(prefix='metatrain_')
     else:
         model.construct_model(prefix='metaval_')
-    model.summ_op = tf.summary.merge_all()
 
     saver = loader = tf.train.Saver(tf.get_collection(
         tf.GraphKeys.TRAINABLE_VARIABLES), max_to_keep=10)
